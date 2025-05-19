@@ -1,0 +1,958 @@
+---
+title:
+  "Psoriasis Detection Based on Clinical and Histopathological Features"
+author: "Louis CARRON"
+date: "May 7, 2024"
+output: 
+  pdf_document:
+    number_sections: true
+geometry: margin=2.5cm, headheight=15pt, top=2cm
+fontsize: 12pt
+documentclass: article
+classoption: twoside
+header-includes:
+- \usepackage{graphicx}
+- \usepackage{subcaption}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \fancyhead[C]{Louis CARRON - MATH-493 Applied Biostatistics - Assignement 3}
+- \fancyfoot[C]{\thepage}
+- \usepackage{titling}
+- \setlength{\droptitle}{-3cm} 
+- \pretitle{\begin{center}\LARGE}
+- \posttitle{\end{center}\vspace{-0.5em}}
+- \preauthor{\begin{center}\large\linespread{0.5}\scshape}
+- \postauthor{\end{center}\vspace{-1em}}  
+- \predate{\begin{center}\large}
+- \postdate{\end{center}}
+- \usepackage{tabularx}
+- \usepackage{enumitem}
+- \usepackage{amsmath}
+---
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+```
+
+
+\section{Introduction} \label{Introduction}
+
+\subsection*{Context of the study :}
+
+|         A medical diagnosis can be a difficult task when several diseases share the same clinical features with only small differences. This is the case of the **differential diagnosis of erythemato-squamous diseases**. Given a large number of observation variables, statistical studies are used to gain insight about the pattern behind every specific disease in comparison to the others. More precisely, classification algorithms can be a significant tool in the prediction of disease family.
+
+\subsection*{Dataset Presentation :}
+|         The database was first introduce in a paper made by two Computer Scientist and one Dermatologist in 1998 to show the efficiency of a classification algorithm, called VFI5. It contains 366 instances for 34 variables split in two different categories : Clinical and Histopathological Attributes. Every attributes apart age and family history is given by a value between $[|0,3|]$ referring to a signification degree of matter. Zero indicates the absence of a feature and three the largest presence as possible. Family History is a value takes the value one or zero according to the observation of the disease in the family or not. More precisely the observed variables are :
+
+```{r results='hide', echo=FALSE}
+column_names <- c(
+    "Eryt",
+    "Scal",
+    "DefB",
+    "Itch",
+    "Koeb",
+    "Poly",
+    "Foll",
+    "Oral",
+    "Knee",
+    "Scap",
+    "FamH",
+    "Mela",
+    "Eosi",
+    "PNLI",
+    "Fibr",
+    "Exoc",
+    "Acan",
+    "Hype",
+    "Para",
+    "Club",
+    "Elon",
+    "Thin",
+    "SpPu",
+    "Munr",
+    "Foca",
+    "Disp",
+    "Vacu",
+    "Spon",
+    "Sawt",
+    "FoHo",
+    "Peri",
+    "Infl",
+    "Band",
+    "Age",
+    "Dise"
+)
+
+
+
+data <- read.csv("data/dermatology.data", sep = ",", header=FALSE, col.names = column_names, na.strings = "?")
+
+head(data)
+```
+
+```{r, results='hide', echo=FALSE}
+
+my_values <- c(
+    "Eryt",
+    "Scal",
+    "DefB",
+    "Itch",
+    "Koeb",
+    "Poly",
+    "Foll",
+    "Oral",
+    "Knee",
+    "Scap",
+    "Mela",
+    "Eosi",
+    "PNLI",
+    "Fibr",
+    "Exoc",
+    "Acan",
+    "Hype",
+    "Para",
+    "Club",
+    "Elon",
+    "Thin",
+    "SpPu",
+    "Munr",
+    "Foca",
+    "Disp",
+    "Vacu",
+    "Spon",
+    "Sawt",
+    "FoHo",
+    "Peri",
+    "Infl",
+    "Band"
+)
+
+```
+
+
+```{r results='hide', echo=FALSE}
+data$Dise <- ifelse(data$Dise %in% c(2, 3, 4, 5, 6), 0, data$Dise)
+mean(data$Dise == 1)
+```
+
+
+The goal of our study is to predict the cases of psoriasis. We want a binary classification with 1 for the psoriasis cases and 0 for the others. What are the relevant factors that lead the apparition of psoriasis ?
+
+\section{Exploratory Data Analysis} \label{EDA}
+
+Before fitting a model, we first process and visualise the data.We want to gain insight in the distributions, and maybe identify correlations between predictors.
+
+\subsection*{Data Pre-Processing}
+
+First, the dataset contains 8 missing value for patient's age. According to the following plot, the Age distribution is symmetric, the mean is **36.3** and the median is equal to **35**. 
+
+```{r results='hide', echo=FALSE}
+
+png(filename = "assets/box_plot_age.jpeg", width = 800, height = 600)
+boxplot(data$Age,
+        main=NULL, 
+        xlab="Age", 
+        outline=TRUE,
+         cex.lab=3,    # Taille des labels des axes
+        cex.axis=1.2)
+dev.off()
+
+age_sans_na <- na.omit(data$Age)
+
+
+breaks <- seq(min(age_sans_na), max(age_sans_na) + 5, by = 5)  # En ajoutant 5 pour inclure la dernière valeur
+
+png(filename = "assets/hist_age.jpeg", width = 800, height = 600)
+hist(age_sans_na,
+     main = NULL,
+     xlab = "Age", 
+     ylab = "Frequency",
+     border = "black", # Couleur des bords des bacs
+     breaks = breaks, # Séparation des bacs par intervalles de 5 ans
+       cex.lab=1.5,    # Taille des labels des axes
+     )
+dev.off()
+
+png(filename = "assets/qq_age.jpeg", width = 800, height = 600)
+qqplot(x = age_sans_na,
+       y = qnorm(ppoints(length(age_sans_na))),
+       main= NULL, 
+       xlab = "Quantiles theoriques",
+       ylab=  "Quantiles Age",
+       cex.lab=1.5,
+       )
+dev.off()
+
+summary(age_sans_na)
+
+cor(qnorm(ppoints(length(age_sans_na))), sort(age_sans_na))
+
+shapiro.test(age_sans_na)
+```
+
+\begin{figure}[!ht]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth} 
+        \centering
+        \includegraphics[width=\textwidth]{assets/box_plot_age_psoriasis.jpeg}
+        \caption{Box Plot}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth} 
+        \centering
+        \includegraphics[width=\textwidth]{assets/hist_age.jpeg}
+        \caption{Histogram}
+    \end{subfigure}
+    \hfill 
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{assets/qq_age.jpeg}
+        \caption{Normal QQ}
+    \end{subfigure}
+    \caption{Age Distribution Plot}
+\end{figure}
+
+The mean is a measure that is highly sensible to outliers. The boxplot shows us that there is no potential outliers in the distribution. The missing values proportion is 0.02, it only represents a small portion of the whole dataframe. The correlation coefficient for the qqplot is **0.993** and the p-value for the statistical test is **0.002**. Thus at a signification level of 0.01, we do not have enough informations to reject the Null Hypothesis that states the normality of our age distribution in the Shapiro-Wilk normality test. 
+
+In conclusion, without loosing any generalities according to the previous statement, the missing values for the age distribution's will be replace by the mean.
+
+
+```{r results='asis', echo=FALSE}
+moyenne <- mean(data$Age, na.rm = TRUE)
+data$Age <- replace(data$Age, is.na(data$Age), moyenne)
+
+shapiro_result <- shapiro.test(data$Age)
+
+shapiro_table <- data.frame(Test = "Shapiro-Wilk",
+                            Statistique = shapiro_result$statistic,
+                            P_value = shapiro_result$p.value)
+
+latex_table <- kable(shapiro_table, format = "latex", booktabs = TRUE, 
+                     caption = "Résultats du test de normalité de Shapiro-Wilk") %>%
+               kable_styling(latex_options = "hold_position")
+latex_table
+```
+The Shapiro-Normality test tells us that at a 0.005 signification level, we do not have enough informations to reject the fact that the age distribution is normally distributed.
+
+\subsection*{Data Exploration}
+
+To identify linear relationship between pairs of variables in the dataset, we compute the correlation Matrix define s.a : $R_{i,j}=\frac{Cov(X_i, X_j)}{\sigma_{X_i}\sigma_{X_j}}$
+The correlation coefficient is a number between -1 and 1 representing the degree of linear dependencies between two variables. For the whole dataset variables, we obtain the following heatmap, where value of $R_{i,j}$ is represented on a continuous color scale :
+
+
+```{r results='hide', echo=FALSE}
+library(corrplot)
+
+cor_data = data
+cor_matrix <- cor(cor_data)
+
+jpeg(filename = "assets/corr_plot.jpeg", width = 800, height = 600)
+
+corrplot(cor_matrix, type="lower",
+         method="color",
+         tl.col="black",
+         tl.srt=50,
+         tl.cex=1.1,
+         cl.cex=1.1,
+         #cl.lim=c(0,10),
+         cl.length=8,
+         bg = "black",
+         )
+dev.off()
+
+
+```
+
+\begin{figure}[!ht]
+    \centering
+    \includegraphics[width=0.7\textwidth]{assets/corr_plot.jpeg}
+    \caption{Correlation graph of the Variables in the Dataset}
+\end{figure}
+
+We can notice that there is no significant correlation between the Age variable and the other in the database. It validates our previous process. 
+
+## PARLER DE LA MULTICOLINEARITE.
+
+
+```{r, results='hide', echo=FALSE}
+for (var in column_names) {
+  file_name <- paste("assets/distrib/distrib_", var, ".jpeg", sep="")
+
+  jpeg(filename = file_name, width = 800, height = 800)
+
+  barplot(table(data[[var]]), main = NULL)
+
+  dev.off()
+}
+```
+
+
+```{r, results='hide', echo=FALSE}
+jpeg(filename = "assets/box_plot_age_psoriasis.jpeg", width = 800, height = 600)
+boxplot(data$Age ~ data$Dise,
+        xlab = "Psoriasis", 
+        ylab = "Age", 
+        main = NULL,
+        outline = TRUE,
+        notch = FALSE,
+        cex.lab=2
+        )
+dev.off()
+```
+\begin{figure}[!ht]
+    \begin{minipage}[c]{0.65\textwidth}
+        The proportion of features presenting a Psoriasis is 0.31 as the Figure 3 shows. As the plot Figure 1 (a) shows, it may exist a difference in age mean between indiviual groups presenting a Psoriasis versus the other. Thus, because of the normality assumption in our age data, we can run a t-test with the following bilateral hypothesis :
+        
+  - $(H_0)$ no difference in mean, $\mu = \mu_0$
+  
+  - $(H_1)$ difference in mean $\mu \ne \mu_0$
+  
+The results of the statistical t-test are print in the following table :
+    \end{minipage}
+    \hfill
+    \begin{minipage}[c]{0.25\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{assets/distrib/Distrib_Dise.jpeg}
+        \caption{Age Distribution between groups (1) Psoriasis, (0) Others}
+    \end{minipage}
+\end{figure}
+
+```{r, results='asis', echo=FALSE}
+library(magick)
+
+t_test_result <- t.test(data$Age ~ data$Dise, data = data, alternative = "two.sided")
+
+t_test_table <- data.frame(
+  Test = "T-test",
+  Statistique = t_test_result$statistic,
+  P_value = t_test_result$p.value,
+  stringsAsFactors = FALSE
+)
+
+latex_table <- kable(t_test_table, format = "latex", booktabs = TRUE, 
+                     caption = "Résultats du T-test") %>%
+               kable_styling(latex_options = "hold_position")
+latex_table
+```
+Then, $p_{value}$ < 0.05. So at a signification level 0.05, we can reject $(H_0)$. In other words, we can observe a statistical difference in mean between the two groups at a signification level 0.05. There's a high probability that the difference is not explicable by chance.
+
+
+### Distribution plot 
+
+```{r, results='hide', echo=FALSE}
+library(dplyr)
+library(ggplot2)
+
+for (var in my_values){
+  
+  file_name <- paste("assets/proportion/distrib_", var, ".jpeg", sep="")
+  jpeg(filename = file_name, width = 800, height = 600)
+
+  
+p1 <- mean(data[[var]][data$Dise == 1])
+p0 <- mean(data[[var]][data$Dise == 0])
+df <- data.frame(
+  Classe = factor(c("Class 0", "Class 1")),
+  Moyenne = c(p0, p1)
+)
+p <- ggplot(df, aes(x = Classe, y = Moyenne, fill = Classe)) +
+  geom_bar(stat = "identity") +
+  ylab(var) +
+  xlab("Psoriasis") +
+  theme_minimal() +
+  theme(legend.position = "none",  # Remove the legend
+        axis.text.x = element_text(size = 30),  # Increase size of x-axis labels
+        axis.text.y = element_text(size = 30),  # Increase size of y-axis labels
+        axis.title.x = element_text(size = 20),  # Increase size of x-axis title
+        axis.title.y = element_text(size = 20)) 
+
+print(p)
+dev.off()
+
+}
+```
+
+
+### OUTLIERS Class 1
+
+```{r results='hide', echo=FALSE}
+
+
+outliers_list <- list()
+
+threshold <- 0.05
+
+for (var in my_values) {
+
+  tab <- data[[var]][data$Dise == 1]
+  f_0 <- sum(tab == 0) / length(tab)
+  f_1 <- sum(tab == 1) / length(tab)
+  f_2 <- sum(tab == 2) / length(tab)
+  f_3 <- sum(tab == 3) / length(tab)
+
+  if( f_0 < threshold ){
+    outliers_index <- which(data$Dise == 1 & data[[var]] == 0 )
+    outliers_list[[var]] <- c(outliers_list[[var]], outliers_index)
+  }
+  if( f_1 < threshold ){
+    outliers_index <- which(data$Dise == 1 & data[[var]] == 1 )
+    outliers_list[[var]] <- c(outliers_list[[var]], outliers_index)
+  }
+  if( f_2 < threshold ){
+    outliers_index <- which(data$Dise == 1 & data[[var]] == 2 )
+    outliers_list[[var]] <- c(outliers_list[[var]], outliers_index)
+  }
+  if( f_3 < threshold ){
+    outliers_index <- which(data$Dise == 1 & data[[var]] == 3 )
+    outliers_list[[var]] <- c(outliers_list[[var]], outliers_index)
+  }
+  
+}
+
+all_outliers_index <- unique(unlist(outliers_list))
+print(all_outliers_index)
+
+data_clean <- data[-all_outliers_index, ]
+
+
+```
+```{r results='hide', echo=FALSE}
+
+for (var in my_values){
+  
+p1 <- mean(data_clean[[var]][data_clean$Dise == 1])
+p0 <- mean(data_clean[[var]][data_clean$Dise == 0])
+df <- data.frame(
+  Classe = factor(c("Classe 0", "Classe 1")),
+  Moyenne = c(p0, p1)
+)
+p <- ggplot(df, aes(x = Classe, y = Moyenne, fill = Classe)) +
+  geom_bar(stat = "identity") +
+  ylab(var) +
+  xlab("Psoriasis") +
+  theme_minimal()
+
+print(p)
+}
+
+```
+
+### OUTLIERS Class 0
+
+
+```{r results='hide', echo=FALSE}
+
+outliers_list <- list()
+
+threshold <- 0.05
+
+for (var in my_values) {
+
+  tab <- data[[var]][data$Dise == 0]
+  f_0 <- sum(tab == 0) / length(tab)
+  f_1 <- sum(tab == 1) / length(tab)
+  f_2 <- sum(tab == 2) / length(tab)
+  f_3 <- sum(tab == 3) / length(tab)
+
+  if( f_0 < threshold ){
+    outliers_index <- which(data$Dise == 0 & data[[var]] == 0 )
+    outliers_list[[var]] <- c(outliers_list[[var]], outliers_index)
+  }
+  if( f_1 < threshold ){
+    outliers_index <- which(data$Dise == 0 & data[[var]] == 1 )
+    outliers_list[[var]] <- c(outliers_list[[var]], outliers_index)
+  }
+  if( f_2 < threshold ){
+    outliers_index <- which(data$Dise == 0 & data[[var]] == 2 )
+    outliers_list[[var]] <- c(outliers_list[[var]], outliers_index)
+  }
+  if( f_3 < threshold ){
+    outliers_index <- which(data$Dise == 0 & data[[var]] == 3 )
+    outliers_list[[var]] <- c(outliers_list[[var]], outliers_index)
+  }
+  
+}
+
+all_outliers_index <- unique(unlist(outliers_list))
+print(all_outliers_index)
+
+data_clean <- data_clean[-all_outliers_index, ]
+
+```
+
+```{r results='hide', echo=FALSE}
+
+for (var in my_values){
+  
+p1 <- mean(data_clean[[var]][data_clean$Dise == 1])
+p0 <- mean(data_clean[[var]][data_clean$Dise == 0])
+df <- data.frame(
+  Classe = factor(c("Classe 0", "Classe 1")),
+  Moyenne = c(p0, p1)
+)
+
+file_name <- paste("assets/proportion_after/distrib_", var, ".jpeg", sep="")
+  jpeg(filename = file_name, width = 800, height = 600)
+
+
+p <- ggplot(df, aes(x = Classe, y = Moyenne, fill = Classe)) +
+  geom_bar(stat = "identity") +
+  ylab(var) +
+  xlab("Psoriasis") +
+  theme_minimal() +
+  theme(legend.position = "none",  # Remove the legend
+        axis.text.x = element_text(size = 30),  # Increase size of x-axis labels
+        axis.text.y = element_text(size = 30),  # Increase size of y-axis labels
+        axis.title.x = element_text(size = 20),  # Increase size of x-axis title
+        axis.title.y = element_text(size = 20)) 
+print(p)
+
+dev.off()
+}
+
+```
+
+
+
+```{r results='hide', echo=FALSE}
+library(corrplot)
+
+cor_data = data_clean
+cor_matrix <- cor(cor_data)
+
+jpeg(filename = "assets/corr_plot_after.jpeg", width = 800, height = 600)
+
+corrplot(cor_matrix, type="lower",
+         method="color",
+         tl.col="black",
+         tl.srt=50,
+         tl.cex=1.1,
+         cl.cex=1.1,
+         #cl.lim=c(0,10),
+         cl.length=8,
+         bg = "black",
+         )
+dev.off()
+
+
+```
+
+
+
+
+\subsection*{Model preparation}
+
+To prepare our data, we choose to do a one-hot encoding. The dataframe is encoded with categorical variables that take their values between {0, 1, 2, 3}. Then, we build a matrix s.a for each variables, a vector of size 4 will represent by 1 the actual degree (categorical value) and 0 for the others. For example, if we observe a 2 degree of Erythma in a patient. The one-hot will encode this information as the vector [0, 0, 1, 0]. The final dataframe before fitting a model will be :
+
+\begin{table}[!ht]
+  \centering
+  \resizebox{\textwidth}{!}{
+    \begin{tabular}{c|c|c|c|c|c|c|c|c}
+    \textbf{Features} & \textbf{Age} & \textbf{Erythma\_1} & \textbf{Erythma\_2} & \textbf{Erythma\_3} & \textbf{Scaling\_1} & \textbf{Scaling\_2} & \textbf{Scaling\_3} & \textbf{...} \\ 
+    \hline
+    $X_i$ & 55 & 0 & 1 & 0 & 1 & 0 & 0 & ... \\
+    \end{tabular}
+  }
+  \caption{Example of one-hot encoding in our study}
+\end{table}
+
+One hot encoding prevent our futur model to gain false insights with numerical values that are categorical in the reality. 
+
+\setlist[itemize]{noitemsep, topsep=0pt, partopsep=1pt}
+
+\begin{itemize}
+
+  \item In our study context and according to the variables definition, we don't want the model to interpret 1 as inferior to 2. In a way, conceptually, we can say that we give more importance to high degree symptoma than low degree. But this relation is categorical and is not equivalent to numerical order relation like inferior or superior. If we had more biological details on what is the meaning of the presence degree of a symptoma, maybe we will be able to say that level 3 is equivalent to (level 1) * 3. In other words, identify a linearity link between degrees. But it is not the case, we do not have enought information on the biological level meaning so we choose the one-hot-encoding. Moreover, symptoma can be quantifiable for some and not for other. We avoid this bias thanks to one-hot-encoding.
+  \item Upgrade performance of the model assuming that all the variables are independants with each others. One hot encoding tranform data into orthogonal vectors.
+
+\end{itemize}
+
+```{r, results='hide', echo=FALSE}
+
+data_factors <- data_clean
+
+data_factors$Dise <- factor(data_factors$Dise, levels = c(0, 1), labels = c("No", "Yes"))
+data_factors$FamH <- factor(data_factors$FamH, levels = c(0, 1), labels = c("0", "1"))
+
+for (col in my_values) {
+  data_factors[[col]] <- factor(data_factors[[col]], levels = c(0, 1, 2, 3), labels = c("0", "1", "2", "3") )
+}
+
+str(data_factors)
+```
+
+
+
+\newpage
+
+\section{Logistic Regression} \label{Logistic Regression}
+
+\subsection{Theoretical}
+
+\subsubsection*{Model Presentation}
+
+The logistic regression is a Generalized Linear Model ideal for classification tasks. Let $\mathbf{X} = [1, X_1, X_2, ...,X_N]^T$ be the observed variables with a term of bias and $\boldsymbol{\beta} = [\beta_0, \beta_1 ..., \beta_N]^T$ the parameters, the model is given by the following equation :
+\vspace{-2mm}
+\[ logit(p(\mathbf{X})=\log(\frac{p(\mathbf{X})}{1-p(\mathbf{X})}) = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + ... + \beta_N X_N  = \boldsymbol{\beta}^T \mathbf{X}    (1)\]
+The output prediction of the model is $p\in[0, 1]$ that represents the probability of having a label 1 according to the input $p(\mathbf{X}) = \mathbb{E}[Y=1|\mathbf{X}] = \mathbb{P}[Y=1|\mathbf{X}]$. The logit function transform a probability in [0, 1] to a continuous value in $-\infty$ to $+\infty$.
+
+The output with the inverse logit function :
+
+\vspace{-2mm}
+\[  p(\mathbf{X}) = \sigma(\boldsymbol{\beta}^T \mathbf{X}) = \frac{1}{1 + \exp(-\boldsymbol{\beta}^T \mathbf{X}) } \]
+
+Equation (1) can also be write according to the odd ratio of $p$ as :
+\vspace{-2mm}
+
+\[ odd(p(\mathbf{X})) = \frac{p(\mathbf{X})}{1-p(\mathbf{X})} = \exp(\beta_0) \prod_{i=1}^{N}\exp(\beta_i X_i)  \]
+
+This mean that for a raise of 1 unit in $X_k$, we multiply by $e^{\beta_k}$ the odd ratio. If the odd ratio is greater than one, we are more likely to have a label one. If the odd ratio is inferior to one, we are less likely to have a label one. Finally if the odd ration is equal to one, we do not have more information about the label prediction.
+
+
+\subsubsection*{Model Fitting}
+
+
+Logistic regression, as a probabilistic model, estimates its parameters $\boldsymbol{\beta}$ using the maximum likelihood method. Having a given label $Y_i=y_i$ for the (i)-th subject can be seen as a Bernoulli distribution, with a probability of success $p(\mathbf{X})$. Thus, we can write : 
+\vspace{-2mm}
+\[\mathbb{P}[Y_i=y_i]=p(\mathbf{X}^{(i)})^{y_i}(1 - p(\mathbf{X}^{(i)} ))^{1-y_i}\]
+\vspace{-2mm}
+Thereby, the likelihood function can be written as:
+\vspace{-2mm}
+\[ 
+L(\mathbf{X}^{(1)}, ..., \mathbf{X}^{(n)}, \boldsymbol{\beta}) = \prod_{i=1}^{n} p(\mathbf{X}^{(i)})^{y_i} (1 - p(\mathbf{X}^{(i)}))^{1-y_i} 
+\]
+\vspace{-2mm}
+Maximizing $L(\boldsymbol{\beta})$ is equivalent to maximizing the log-likelihood function:
+\vspace{-2mm}
+\[ 
+I(\mathbf{X}^{(1)}, ..., \mathbf{X}^{(n)}, \boldsymbol{\beta}) = \log(L(\mathbf{X}^{(1)}, ..., \mathbf{X}^{(n)}, \beta)) = \sum_{i=1}^{n} \left( y_i \log(p(\mathbf{X}^{(i)})) + (1 - y_i) \log(1 - p(\mathbf{X}^{(i)})) \right) 
+\]
+
+This last equation is non linear, then we do not have an analytical solution for the parameters $\boldsymbol{\beta}$. To solve this problem, we use iteratively algorithms like Newton Raphson, gradient descent.
+
+
+\subsection{Application to our study}
+
+
+```{r results='hide', echo=FALSE}
+if (!require(caret)) install.packages("caret")
+library(caret)
+
+set.seed(122) 
+trainIndex <- createDataPartition(data_factors$Dise, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+data_train <- data_factors[trainIndex,]
+data_test <- data_factors[-trainIndex,]
+
+train_control <- trainControl(method = "cv", number = 10)
+```
+
+
+### MODEL INITIAL AVEC TOUS LES PARAM
+
+```{r, results='hide', echo=FALSE}
+model_initial <- glm(
+  Dise ~ . -Peri -Vacu -Foca, 
+  data = data_train, 
+  family=binomial(link="logit"),
+  control=glm.control(maxit=100),
+  )
+
+summary(model_initial)
+```
+```{r, results='hide', echo=FALSE}
+library(car)
+vif_values_clean <- vif(model_initial)
+print(vif_values_clean)
+
+```
+
+### UTILISATION DE LA METHODE FIRTH
+
+
+```{r, results='hide', echo=FALSE}
+library("brglm2")
+
+bias_red_model <- glm(
+  Dise ~ . - Foca - Peri - Vacu, 
+  data = data_train, 
+  family=binomial(link="logit"),
+  control=glm.control(maxit=100),
+  method = "brglmFit"
+  )
+summary(bias_red_model)
+```
+
+
+
+```{r, results='hide', echo=FALSE}
+library(car)
+vif_values_clean <- vif(bias_red_model)
+print(vif_values_clean)
+
+```
+
+
+
+
+### Filtre la multicolinearité
+
+
+
+```{r, results='hide', echo=FALSE}
+
+model_1 <- glm(
+  Dise ~ . - Foca - Peri - Vacu - Band - Thin - Club - Oral - Poly - Elon, 
+  data = data_train, 
+  family=binomial(link="logit"),
+  control=glm.control(maxit=150),
+  method = "brglmFit"
+  )
+
+summary(model_1)
+vif_values_clean <- vif(model_1)
+print(vif_values_clean)
+
+```
+
+### SELECTION PAR LASSO
+
+
+```{r results='hide', echo=FALSE}
+library(glmnet)
+formula <- formula(model_1)
+
+x <- model.matrix(formula, data_train)
+y <- data_train$Dise
+
+# Ajustement du modèle Lasso
+lasso_model <- cv.glmnet(x, y, alpha = 1, family = binomial(link="logit"))
+
+# Extraction des coefficients
+coef(lasso_model, s = "lambda.min")
+
+```
+
+
+```{r results='hide', echo=FALSE}
+model_lasso <- glm(
+  Dise ~ Scap + Fibr + Exoc + Munr,
+  data = data_train, 
+  family=binomial(link="logit"),
+  control=glm.control(maxit=150),
+  method = "brglmFit"
+)
+
+summary(model_lasso)
+
+vif_values_clean <- vif(model_lasso)
+print(vif_values_clean)
+
+```
+
+
+
+
+
+
+### ASSESSMENT :
+
+### VIF CHECK OK
+
+
+```{r, results='hide', echo=FALSE}
+library(car)
+vif_values_clean <- vif(model_lasso)
+print(vif_values_clean)
+
+```
+### COOK DISTANCE
+
+```{r, results='hide', echo=FALSE}
+# Calculer la distance de Cook
+cook_distances <- cooks.distance(model_lasso)
+
+# Définir un seuil pour la distance de Cook
+threshold <- 4 / nrow(data_train)
+
+# Identifier les indices des outliers potentiels
+outliers <- which(cook_distances > threshold)
+
+# Afficher les indices des outliers
+print(cook_distances[cook_distances> threshold])
+
+```
+
+```{r, results='hide', echo=FALSE}
+library(ggplot2)
+
+# Créer un dataframe pour la visualisation
+cook_data <- data.frame(Observation = seq_along(cook_distances), CookDistance = cook_distances)
+
+jpeg(filename = "assets/cook_distance.jpeg", width = 800, height = 600)
+
+# Visualiser les distances de Cook
+p <- ggplot(cook_data, aes(x = Observation, y = CookDistance)) +
+  geom_bar(stat = "identity") +
+  geom_hline(yintercept = 4 / nrow(data_factors), color = "red", linetype = "dashed") +
+  labs(title = NULL, x = "Observation", y = "Cook Distance") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 20),  # Augmente la taille du texte des axes x et incline les labels
+    axis.text.y = element_text(size = 20),  # Augmente la taille du texte des axes y
+    axis.title.x = element_text(size = 25), # Augmente la taille des labels de l'axe x
+    axis.title.y = element_text(size = 25)
+    )
+print(p)
+
+
+```
+
+
+##### A
+
+
+```{r, results='hide', echo=FALSE}
+
+formula <- formula(model_lasso)
+
+model_cv <- train(formula, 
+                  data = data_train, 
+                  family=binomial(link="logit"),
+                  control=glm.control(maxit=200),
+                  method = "glm",
+                  trControl = train_control,
+                  )
+
+print(model_cv)
+```
+
+```{r, results='hide', echo=FALSE}
+# Faire des prédictions sur l'ensemble de test
+
+pred_probs <- predict(model_cv, newdata = data_test, type = "prob")[,2]
+pred_labels <- ifelse(pred_probs > 0.5, "Yes", "No")
+pred_labels <- factor(pred_labels, level = c("No", "Yes"))
+
+conf_matrix <- confusionMatrix(pred_labels, data_test$Dise)
+print(conf_matrix)
+```
+
+
+
+
+### Log Odd pour linearité
+
+Pour les variables catégorielles, l'hypothèse de linéarité est respectée si chaque catégorie contribue de manière additive aux log-odds. En d'autres termes, il n'y a pas de relation non linéaire ou d'interaction complexe entre les catégories et les log-odds
+
+```{r, results='hide', echo=FALSE}
+library(forestplot)
+library(dplyr)
+# Extraire les coefficients et les erreurs standards
+coef_summary <- summary(model_lasso)$coefficients
+
+# Calculer les odds ratios et les intervalles de confiance
+odds_ratios <- exp(coef_summary[, 1])
+conf_int <- exp(confint(model_lasso))
+
+# Préparer les données pour le forest plot
+forest_data <- data.frame(
+  Variable = rownames(coef_summary),
+  OR = odds_ratios,
+  LCL = conf_int[, 1],
+  UCL = conf_int[, 2]
+)
+
+# Ajouter une ligne pour le nom de l'intercept
+forest_data <- forest_data %>% 
+  mutate(Variable = ifelse(Variable == "(Intercept)", "Intercept", Variable))
+
+# Afficher les données préparées
+print(forest_data)
+
+```
+```{r, results='hide', echo=FALSE}
+# Calculer les bornes minimales et maximales des intervalles de confiance
+min_LCL <- min(forest_data$LCL)
+max_UCL <- max(forest_data$UCL)
+
+# Ticks pour se concentrer sur les petites valeurs
+xticks <- c(0, 0.1, 0.5, 1, 2, 5)
+
+# Limiter l'affichage des valeurs à une plage spécifique
+display_min <- 0
+display_max <- 5
+
+# Filtrer les données pour exclure les valeurs en dehors des limites spécifiées
+forest_data_filtered <- forest_data %>%
+  filter(LCL >= display_min & UCL <= display_max)
+
+
+exp_mean <- forest_data$OR
+exp_lower <- forest_data$LCL
+exp_upper <- forest_data$UCL
+
+
+tabletext <- cbind(
+  c("Variable", as.character(forest_data$Variable)),
+  c("Odds Ratio", sprintf("%.2f", forest_data$OR)),
+  c("95% CI", paste0("(", sprintf("%.2f", forest_data$LCL), ", ", sprintf("%.2f", forest_data$UCL), ")"))
+)
+
+forestplot(tabletext, 
+           mean = c(NA, exp_mean), 
+           lower = c(NA, exp_lower), 
+           upper = c(NA, exp_upper),
+           zero = 1,
+           xlog = FALSE, # Échelle logarithmique
+           col = fpColors(box = "royalblue", line = "darkblue", summary = "royalblue"),
+           title = "Forest Plot of Odds Ratios",
+           xticks = xticks, # Ticks personnalisés
+           xlab = "Odds Ratio",
+           clip = c(display_min, display_max) # Limites ajustées pour inclure toutes les valeurs
+)
+```
+
+
+```{r results='hide', echo=FALSE}
+logit <- predict(model_lasso, type = "link")
+predictors <- c("Scap","Fibr", "Exoc", "Munr")
+
+jpeg(filename = "Logit_vs_Predictors.jpeg", width = 800, height = 800)
+
+par(mfrow = c(ceiling(length(predictors)/2), 2))
+
+# Créer les scatterplots
+for (var in predictors) {
+  plot(logit ~ data_train[[var]], 
+           xlab = var, 
+           ylab = "Logit (log-odds)", 
+           main = paste("Logit vs", var),
+           outline = FALSE,
+       cex.lab=1.5,
+       )
+  }
+
+dev.off()
+
+```
+
+
+
+
+### Écrire le modèle final
+
+
+
+\section*{Conclusion} \label{Conclusion}
+
+
+
+
+
+
