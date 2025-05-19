@@ -1,6 +1,6 @@
 # Applied Biostatistics – Psoriasis Detection
 
-This project explores the use of logistic regression for detecting psoriasis based on clinical and histopathological features. It was conducted as part of an applied biostatistics assignment.
+This project explores the use of logistic regression for detecting psoriasis based on clinical and histopathological features. It was conducted as part of an applied biostatistics assignment during spring semester 2024.
 
 ## 🗂 Project Structure
 
